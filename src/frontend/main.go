@@ -28,9 +28,11 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"google.golang.org/grpc"
 )
 
@@ -169,20 +171,29 @@ func initStats(log logrus.FieldLogger) {
 }
 
 func initTracing(log logrus.FieldLogger, ctx context.Context, svc *frontendServer) (*sdktrace.TracerProvider, error) {
-	mustMapEnv(&svc.collectorAddr, "COLLECTOR_SERVICE_ADDR")
-	mustConnGRPC(ctx, &svc.collectorConn, svc.collectorAddr)
-	exporter, err := otlptracegrpc.New(
-		ctx,
-		otlptracegrpc.WithGRPCConn(svc.collectorConn))
+	// Initialize the Jaeger exporter
+	jaegerHost := os.Getenv("JAEGER_AGENT_HOST")
+	jaegerPort := os.Getenv("JAEGER_AGENT_PORT")
+	exporter, err := jaeger.New(
+		jaeger.WithAgentEndpoint(jaeger.WithAgentHost(jaegerHost), jaeger.WithAgentPort(jaegerPort)),
+	)
 	if err != nil {
-		log.Warnf("warn: Failed to create trace exporter: %v", err)
+		log.Warnf("Failed to create Jaeger exporter: %v", err)
+		return nil, err
 	}
+
+	// Set up a trace provider
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
-		sdktrace.WithSampler(sdktrace.AlwaysSample()))
+		sdktrace.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String("frontend"),
+		)),
+	)
 	otel.SetTracerProvider(tp)
 
-	return tp, err
+	log.Info("Jaeger tracing initialized")
+	return tp, nil
 }
 
 func initProfiling(log logrus.FieldLogger, service, version string) {
