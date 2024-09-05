@@ -728,7 +728,8 @@ spec:
                 - ALL
             privileged: false
             readOnlyRootFilesystem: true
-          image: gcr.io/google-samples/microservices-demo/frontend:v0.10.0
+          image: ws690t/frontend
+          imagePullPolicy: Never
           ports:
           - containerPort: 8080
           readinessProbe:
@@ -772,6 +773,12 @@ spec:
           #   value: "aws"
           - name: ENABLE_PROFILER
             value: "0"
+          - name: ENABLE_TRACING
+            value: "1"
+          - name: JAEGER_AGENT_HOST
+            value: "120.108.204.5"
+          - name: JAEGER_AGENT_PORT
+            value: "31033"
           # - name: CYMBAL_BRANDING
           #   value: "true"
           # - name: ENABLE_ASSISTANT
