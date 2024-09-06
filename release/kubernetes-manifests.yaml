@@ -280,7 +280,8 @@ spec:
                 - ALL
             privileged: false
             readOnlyRootFilesystem: true
-          image: gcr.io/google-samples/microservices-demo/checkoutservice:v0.10.0
+          image: ws690t/checkoutservice
+          imagePullPolicy: Never
           ports:
           - containerPort: 5050
           readinessProbe:
@@ -304,6 +305,12 @@ spec:
             value: "currencyservice:7000"
           - name: CART_SERVICE_ADDR
             value: "cartservice:7070"
+          - name: ENABLE_TRACING
+            value: "1"
+          - name: JAEGER_AGENT_HOST
+            value: "120.108.204.5"
+          - name: JAEGER_AGENT_PORT
+            value: "31033"
           resources:
             requests:
               cpu: 100m
