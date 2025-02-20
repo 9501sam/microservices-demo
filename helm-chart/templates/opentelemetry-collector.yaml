@@ -136,22 +136,31 @@ data:
   collector-gateway-config-template.yaml: |
     receivers:
       otlp:
-        protocols: 
+        protocols:
           grpc:
+            endpoint: "0.0.0.0:4317"  # 允許外部連線
     processors:
     exporters:
-      googlecloud:
-        project: {{ .Values.opentelemetryCollector.projectId | quote }}
+      otlp:
+        endpoint: "jaeger.online-boutique.svc:4317"  # TODO
+        tls:
+          insecure: true
+            #   googlecloud:
+      #     project: {{ .Values.opentelemetryCollector.projectId | quote }}
     service:
       pipelines:
         traces:
           receivers: [otlp] # Receive otlp-formatted data from other collector instances
           processors: []
-          exporters: [googlecloud] # Export traces directly to Google Cloud
-        metrics:
-          receivers: [otlp]
-          processors: []
-          exporters: [googlecloud] # Export metrics to Google Cloud
+          exporters: [otlp] # TODO
+        # traces:
+        #   receivers: [otlp] # Receive otlp-formatted data from other collector instances
+        #   processors: []
+        #   exporters: [googlecloud] # Export traces directly to Google Cloud
+        # metrics:
+        #   receivers: [otlp]
+        #   processors: []
+        #   exporters: [googlecloud] # Export metrics to Google Cloud
 {{- if .Values.networkPolicies.create }}
 ---
 apiVersion: networking.k8s.io/v1

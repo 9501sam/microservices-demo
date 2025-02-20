@@ -87,7 +87,7 @@ spec:
           value: "{{ .Values.productCatalogService.name }}:3550"
         {{- if .Values.opentelemetryCollector.create }}
         - name: COLLECTOR_SERVICE_ADDR
-          value: "{{ .Values.opentelemetryCollector.name }}:4317"
+          value: "{{ .Values.opentelemetryCollector.name }}.online-boutique.svc:4317"
         - name: OTEL_SERVICE_NAME
           value: "{{ .Values.recommendationService.name }}"
         {{- end }}
