@@ -43,6 +43,8 @@ spec:
       labels:
         app: {{ .Values.currencyService.name }}
     spec:
+      nodeSelector:
+        general-node: "true"
       {{- if .Values.serviceAccounts.create }}
       serviceAccountName: {{ .Values.currencyService.name }}
       {{- else }}
