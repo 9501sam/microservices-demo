@@ -10,6 +10,11 @@ using Microsoft.Extensions.Hosting;
 using cartservice.cartstore;
 using cartservice.services;
 using Microsoft.Extensions.Caching.StackExchangeRedis;
+using OpenTelemetry.Trace;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Logs;
 
 namespace cartservice
 {
@@ -21,7 +26,7 @@ namespace cartservice
         }
 
         public IConfiguration Configuration { get; }
-        
+
         // This method gets called by the runtime. Use this method to add services to the container.
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
@@ -55,9 +60,24 @@ namespace cartservice
                 services.AddSingleton<ICartStore, RedisCartStore>();
             }
 
+			string otlpEndpoint = "http://opentelemetrycollector.online-boutique.svc:4317";
 
-            services.AddGrpc();
-        }
+			services.AddOpenTelemetry()
+				.WithTracing(tracerProviderBuilder =>
+						{
+						tracerProviderBuilder
+						.AddSource("cartservice") // 設定 OpenTelemetry 追蹤來源
+						.SetResourceBuilder(ResourceBuilder.CreateDefault()
+								.AddService("cartservice"))
+						.AddAspNetCoreInstrumentation()  // 追蹤 gRPC 和 HTTP 請求
+						.AddGrpcClientInstrumentation() // 追蹤 gRPC 客戶端請求
+						.AddHttpClientInstrumentation() // 追蹤 HTTP 請求 (如有)
+						.AddRedisInstrumentation() // 追蹤 Redis 操作
+						.AddOtlpExporter(opts => opts.Endpoint = new Uri(otlpEndpoint)); // 發送資料到 OpenTelemetry Collector
+						});
+
+			services.AddGrpc();
+		}
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -68,6 +88,9 @@ namespace cartservice
             }
 
             app.UseRouting();
+
+			// 啟用 OpenTelemetry Prometheus 指標暴露端點 (如果需要)
+			// app.UseOpenTelemetryPrometheusScrapingEndpoint();
 
             app.UseEndpoints(endpoints =>
             {
