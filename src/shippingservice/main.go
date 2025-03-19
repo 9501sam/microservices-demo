@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -22,7 +23,13 @@ import (
 
 	"cloud.google.com/go/profiler"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+
+	// "golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
@@ -53,13 +60,7 @@ func init() {
 }
 
 func main() {
-	if os.Getenv("DISABLE_TRACING") == "" {
-		log.Info("Tracing enabled, but temporarily unavailable")
-		log.Info("See https://github.com/GoogleCloudPlatform/microservices-demo/issues/422 for more info.")
-		go initTracing()
-	} else {
-		log.Info("Tracing disabled.")
-	}
+	initTracing()
 
 	if os.Getenv("DISABLE_PROFILER") == "" {
 		log.Info("Profiling enabled.")
@@ -79,14 +80,19 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	var srv *grpc.Server
-	if os.Getenv("DISABLE_STATS") == "" {
-		log.Info("Stats enabled, but temporarily unavailable")
-		srv = grpc.NewServer()
-	} else {
-		log.Info("Stats disabled.")
-		srv = grpc.NewServer()
-	}
+	// var srv *grpc.Server
+	// if os.Getenv("DISABLE_STATS") == "" {
+	// 	log.Info("Stats enabled, but temporarily unavailable")
+	// 	srv = grpc.NewServer()
+	// } else {
+	// 	log.Info("Stats disabled.")
+	// 	srv = grpc.NewServer()
+	// }
+	srv := grpc.NewServer(
+		grpc.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()),
+		grpc.StreamInterceptor(otelgrpc.StreamServerInterceptor()),
+	)
+
 	svc := &server{}
 	pb.RegisterShippingServiceServer(srv, svc)
 	healthpb.RegisterHealthServer(srv, svc)
@@ -115,6 +121,10 @@ func (s *server) Watch(req *healthpb.HealthCheckRequest, ws healthpb.Health_Watc
 
 // GetQuote produces a shipping quote (cost) in USD.
 func (s *server) GetQuote(ctx context.Context, in *pb.GetQuoteRequest) (*pb.GetQuoteResponse, error) {
+	tracer := otel.Tracer("shippingservice")
+	ctx, span := tracer.Start(ctx, "GetQuote")
+	defer span.End()
+
 	log.Info("[GetQuote] received request")
 	defer log.Info("[GetQuote] completed request")
 
@@ -134,6 +144,10 @@ func (s *server) GetQuote(ctx context.Context, in *pb.GetQuoteRequest) (*pb.GetQ
 // ShipOrder mocks that the requested items will be shipped.
 // It supplies a tracking ID for notional lookup of shipment delivery status.
 func (s *server) ShipOrder(ctx context.Context, in *pb.ShipOrderRequest) (*pb.ShipOrderResponse, error) {
+	tracer := otel.Tracer("shippingservice")
+	ctx, span := tracer.Start(ctx, "ShipOrder")
+	defer span.End()
+
 	log.Info("[ShipOrder] received request")
 	defer log.Info("[ShipOrder] completed request")
 	// 1. Create a Tracking ID
@@ -151,7 +165,32 @@ func initStats() {
 }
 
 func initTracing() {
-	// TODO(arbrown) Implement OpenTelemetry tracing
+	ctx := context.Background()
+	collectorAddr := os.Getenv("COLLECTOR_SERVICE_ADDR")
+	if collectorAddr == "" {
+		log.Warn("COLLECTOR_SERVICE_ADDR is not set, tracing is disabled")
+		return
+	}
+
+	conn, err := grpc.DialContext(ctx, collectorAddr, grpc.WithInsecure())
+	if err != nil {
+		log.Warnf("Failed to connect to collector: %v", err)
+		return
+	}
+	exporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
+	if err != nil {
+		log.Warnf("Failed to create trace exporter: %v", err)
+		return
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+	)
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+
+	log.Info("OpenTelemetry tracing initialized")
 }
 
 func initProfiling(service, version string) {

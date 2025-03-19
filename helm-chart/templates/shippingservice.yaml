@@ -68,10 +68,20 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: {{ .Values.images.repository }}/{{ .Values.shippingService.name }}:{{ .Values.images.tag | default .Chart.AppVersion }}
+        image: 9501sam/shippingservice:latest # {{ .Values.images.repository }}/{{ .Values.shippingService.name }}:{{ .Values.images.tag | default .Chart.AppVersion }}
         ports:
         - containerPort: 50051
         env:
+        {{- if .Values.opentelemetryCollector.create }}
+        - name: COLLECTOR_SERVICE_ADDR
+          value: "{{ .Values.opentelemetryCollector.name }}.online-boutique.svc:4317"
+        - name: OTEL_SERVICE_NAME
+          value: "{{ .Values.shippingService.name }}"
+        {{- end }}
+        {{- if .Values.googleCloudOperations.tracing }}
+        - name: ENABLE_TRACING
+          value: "1"
+        {{- end }}
         - name: PORT
           value: "50051"
         {{- if not .Values.googleCloudOperations.profiler }}
