@@ -80,14 +80,6 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	// var srv *grpc.Server
-	// if os.Getenv("DISABLE_STATS") == "" {
-	// 	log.Info("Stats enabled, but temporarily unavailable")
-	// 	srv = grpc.NewServer()
-	// } else {
-	// 	log.Info("Stats disabled.")
-	// 	srv = grpc.NewServer()
-	// }
 	srv := grpc.NewServer(
 		grpc.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()),
 		grpc.StreamInterceptor(otelgrpc.StreamServerInterceptor()),
@@ -121,10 +113,6 @@ func (s *server) Watch(req *healthpb.HealthCheckRequest, ws healthpb.Health_Watc
 
 // GetQuote produces a shipping quote (cost) in USD.
 func (s *server) GetQuote(ctx context.Context, in *pb.GetQuoteRequest) (*pb.GetQuoteResponse, error) {
-	tracer := otel.Tracer("shippingservice")
-	ctx, span := tracer.Start(ctx, "GetQuote")
-	defer span.End()
-
 	log.Info("[GetQuote] received request")
 	defer log.Info("[GetQuote] completed request")
 
@@ -144,10 +132,6 @@ func (s *server) GetQuote(ctx context.Context, in *pb.GetQuoteRequest) (*pb.GetQ
 // ShipOrder mocks that the requested items will be shipped.
 // It supplies a tracking ID for notional lookup of shipment delivery status.
 func (s *server) ShipOrder(ctx context.Context, in *pb.ShipOrderRequest) (*pb.ShipOrderResponse, error) {
-	tracer := otel.Tracer("shippingservice")
-	ctx, span := tracer.Start(ctx, "ShipOrder")
-	defer span.End()
-
 	log.Info("[ShipOrder] received request")
 	defer log.Info("[ShipOrder] completed request")
 	// 1. Create a Tracking ID
