@@ -35,6 +35,7 @@ import io.opentelemetry.sdk.OpenTelemetrySdk;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
 import io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter;
+import io.opentelemetry.sdk.resources.Resource;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -48,6 +49,7 @@ import org.apache.logging.log4j.Logger;
 public final class AdService {
 
   private static final Logger logger = LogManager.getLogger(AdService.class);
+  // private static final Tracer tracer = GlobalOpenTelemetry.getTracer("AdService");
 
   @SuppressWarnings("FieldCanBeLocal")
   private static int MAX_ADS_TO_SERVE = 2;
@@ -99,6 +101,8 @@ public final class AdService {
      */
     @Override
     public void getAds(AdRequest req, StreamObserver<AdResponse> responseObserver) {
+      Tracer tracer = GlobalOpenTelemetry.getTracer("AdService");
+      Span span = tracer.spanBuilder("getAds").startSpan();
       AdService service = AdService.getInstance();
       try {
         List<Ad> allAds = new ArrayList<>();
@@ -121,6 +125,8 @@ public final class AdService {
       } catch (StatusRuntimeException e) {
         logger.log(Level.WARN, "GetAds Failed with status {}", e.getStatus());
         responseObserver.onError(e);
+      } finally {
+        span.end();
       }
     }
   }
@@ -218,6 +224,9 @@ public final class AdService {
           .setEndpoint("http://opentelemetrycollector.online-boutique.svc:4317")
           .build();
 
+      // Resource resource = Resource.getDefault()
+      //     .merge(Resource.create(Attributes.of(ResourceAttributes.SERVICE_NAME, "adservice")));
+
       SdkTracerProvider tracerProvider = SdkTracerProvider.builder()
           .addSpanProcessor(BatchSpanProcessor.builder(exporter).build())
           .build();
@@ -229,12 +238,7 @@ public final class AdService {
   /** Main launches the server from the command line. */
   public static void main(String[] args) throws IOException, InterruptedException {
 
-    new Thread(
-            () -> {
-              initStats();
-              initTracing();
-            })
-        .start();
+    initTracing();
 
     // Start the RPC server. You shouldn't see any output from gRPC before this.
     logger.info("AdService starting.");
