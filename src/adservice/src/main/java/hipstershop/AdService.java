@@ -30,6 +30,7 @@ import io.grpc.services.*;
 import io.grpc.stub.StreamObserver;
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.sdk.OpenTelemetrySdk;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
@@ -50,6 +51,20 @@ public final class AdService {
 
   private static final Logger logger = LogManager.getLogger(AdService.class);
   // private static final Tracer tracer = GlobalOpenTelemetry.getTracer("AdService");
+  private static final String SERVICE_NAME = "adservice";
+  private static final Tracer tracer = initTracing();
+
+  private static Tracer initTracing() {
+      String otlpEndpoint = "http://opentelemetrycollector.online-boutique.svc:4317";
+      OtlpGrpcSpanExporter spanExporter = OtlpGrpcSpanExporter.builder().setEndpoint(otlpEndpoint).build();
+      SdkTracerProvider tracerProvider = SdkTracerProvider.builder()
+          .addSpanProcessor(BatchSpanProcessor.builder(spanExporter).build())
+          .setResource(Resource.getDefault().toBuilder().put("service.name", SERVICE_NAME).build())
+          .build();
+      OpenTelemetrySdk openTelemetry = OpenTelemetrySdk.builder().setTracerProvider(tracerProvider).build();
+      return openTelemetry.getTracer(SERVICE_NAME);
+
+  }
 
   @SuppressWarnings("FieldCanBeLocal")
   private static int MAX_ADS_TO_SERVE = 2;
@@ -101,8 +116,7 @@ public final class AdService {
      */
     @Override
     public void getAds(AdRequest req, StreamObserver<AdResponse> responseObserver) {
-      Tracer tracer = GlobalOpenTelemetry.getTracer("AdService");
-      Span span = tracer.spanBuilder("getAds").startSpan();
+      Span span = tracer.spanBuilder("getAds").setSpanKind(SpanKind.SERVER).startSpan();
       AdService service = AdService.getInstance();
       try {
         List<Ad> allAds = new ArrayList<>();
@@ -219,26 +233,26 @@ public final class AdService {
 
   }
 
-  private static void initTracing() {
-      OtlpGrpcSpanExporter exporter = OtlpGrpcSpanExporter.builder()
-          .setEndpoint("http://opentelemetrycollector.online-boutique.svc:4317")
-          .build();
+  // private static void initTracing() {
+  //     OtlpGrpcSpanExporter exporter = OtlpGrpcSpanExporter.builder()
+  //         .setEndpoint("http://opentelemetrycollector.online-boutique.svc:4317")
+  //         .build();
 
-      // Resource resource = Resource.getDefault()
-      //     .merge(Resource.create(Attributes.of(ResourceAttributes.SERVICE_NAME, "adservice")));
+  //     // Resource resource = Resource.getDefault()
+  //     //     .merge(Resource.create(Attributes.of(ResourceAttributes.SERVICE_NAME, "adservice")));
 
-      SdkTracerProvider tracerProvider = SdkTracerProvider.builder()
-          .addSpanProcessor(BatchSpanProcessor.builder(exporter).build())
-          .build();
+  //     SdkTracerProvider tracerProvider = SdkTracerProvider.builder()
+  //         .addSpanProcessor(BatchSpanProcessor.builder(exporter).build())
+  //         .build();
 
-      OpenTelemetrySdk.builder().setTracerProvider(tracerProvider).buildAndRegisterGlobal();
-      logger.info("OpenTelemetry tracing initialized");
-  }
+  //     OpenTelemetrySdk.builder().setTracerProvider(tracerProvider).buildAndRegisterGlobal();
+  //     logger.info("OpenTelemetry tracing initialized");
+  // }
 
   /** Main launches the server from the command line. */
   public static void main(String[] args) throws IOException, InterruptedException {
 
-    initTracing();
+    // initTracing();
 
     // Start the RPC server. You shouldn't see any output from gRPC before this.
     logger.info("AdService starting.");
