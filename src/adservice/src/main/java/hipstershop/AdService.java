@@ -28,6 +28,13 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
 import io.grpc.services.*;
 import io.grpc.stub.StreamObserver;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.sdk.OpenTelemetrySdk;
+import io.opentelemetry.sdk.trace.SdkTracerProvider;
+import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
+import io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -207,16 +214,16 @@ public final class AdService {
   }
 
   private static void initTracing() {
-    if (System.getenv("DISABLE_TRACING") != null) {
-      logger.info("Tracing disabled.");
-      return;
-    }
-    logger.info("Tracing enabled but temporarily unavailable");
-    logger.info("See https://github.com/GoogleCloudPlatform/microservices-demo/issues/422 for more info.");
+      OtlpGrpcSpanExporter exporter = OtlpGrpcSpanExporter.builder()
+          .setEndpoint("http://opentelemetrycollector.online-boutique.svc:4317")
+          .build();
 
-    // TODO(arbrown) Implement OpenTelemetry tracing
-    
-    logger.info("Tracing enabled - Stackdriver exporter initialized.");
+      SdkTracerProvider tracerProvider = SdkTracerProvider.builder()
+          .addSpanProcessor(BatchSpanProcessor.builder(exporter).build())
+          .build();
+
+      OpenTelemetrySdk.builder().setTracerProvider(tracerProvider).buildAndRegisterGlobal();
+      logger.info("OpenTelemetry tracing initialized");
   }
 
   /** Main launches the server from the command line. */
