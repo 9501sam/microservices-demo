@@ -18,12 +18,18 @@ using System.Threading.Tasks;
 using Grpc.Core;
 using Microsoft.Extensions.Caching.Distributed;
 using Google.Protobuf;
+using System.Diagnostics;
+using OpenTelemetry.Trace;
+using StackExchange.Redis;
+
 
 namespace cartservice.cartstore
 {
     public class RedisCartStore : ICartStore
     {
         private readonly IDistributedCache _cache;
+        private static readonly ActivitySource ActivitySource = new("cartservice");
+
 
         public RedisCartStore(IDistributedCache cache)
         {
@@ -33,6 +39,13 @@ namespace cartservice.cartstore
         public async Task AddItemAsync(string userId, string productId, int quantity)
         {
             Console.WriteLine($"AddItemAsync called with userId={userId}, productId={productId}, quantity={quantity}");
+
+            using var activity = ActivitySource.StartActivity("RedisAddItem", ActivityKind.Client);
+            activity?.SetTag("db.system", "redis");
+            activity?.SetTag("db.operation", "SET");
+            activity?.SetTag("db.redis.key", userId);
+            activity?.SetTag("user.id", userId);
+            activity?.SetTag("cart.item", productId);
 
             try
             {
@@ -58,10 +71,13 @@ namespace cartservice.cartstore
                     }
                 }
                 await _cache.SetAsync(userId, cart.ToByteArray());
+                activity?.SetStatus(ActivityStatusCode.Ok);
             }
             catch (Exception ex)
             {
-                throw new RpcException(new Status(StatusCode.FailedPrecondition, $"Can't access cart storage. {ex}"));
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                activity?.AddEvent(new ActivityEvent("Exception", tags: new ActivityTagsCollection { { "exception.message", ex.Message } }));
+                throw new Grpc.Core.RpcException(new Grpc.Core.Status(Grpc.Core.StatusCode.FailedPrecondition, ex.Message));
             }
         }
 
@@ -69,20 +85,35 @@ namespace cartservice.cartstore
         {
             Console.WriteLine($"EmptyCartAsync called with userId={userId}");
 
+            using var activity = ActivitySource.StartActivity("RedisEmptyCart", ActivityKind.Client);
+            activity?.SetTag("db.system", "redis");
+            activity?.SetTag("db.operation", "DELETE");
+            activity?.SetTag("db.redis.key", userId);
+            activity?.SetTag("user.id", userId);
+
             try
             {
                 var cart = new Hipstershop.Cart();
                 await _cache.SetAsync(userId, cart.ToByteArray());
+                activity?.SetStatus(ActivityStatusCode.Ok);
             }
             catch (Exception ex)
             {
-                throw new RpcException(new Status(StatusCode.FailedPrecondition, $"Can't access cart storage. {ex}"));
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                activity?.AddEvent(new ActivityEvent("Exception", tags: new ActivityTagsCollection { { "exception.message", ex.Message } }));
+                throw new Grpc.Core.RpcException(new Grpc.Core.Status(Grpc.Core.StatusCode.FailedPrecondition, ex.Message));
             }
         }
 
         public async Task<Hipstershop.Cart> GetCartAsync(string userId)
         {
             Console.WriteLine($"GetCartAsync called with userId={userId}");
+
+            using var activity = ActivitySource.StartActivity("RedisGetCart", ActivityKind.Client);
+            activity?.SetTag("db.system", "redis");
+            activity?.SetTag("db.operation", "GET");
+            activity?.SetTag("db.redis.key", userId);
+            activity?.SetTag("user.id", userId);
 
             try
             {
@@ -91,15 +122,19 @@ namespace cartservice.cartstore
 
                 if (value != null)
                 {
+                    activity?.SetStatus(ActivityStatusCode.Ok);
                     return Hipstershop.Cart.Parser.ParseFrom(value);
                 }
 
                 // We decided to return empty cart in cases when user wasn't in the cache before
+                activity?.SetStatus(ActivityStatusCode.Ok);
                 return new Hipstershop.Cart();
             }
             catch (Exception ex)
             {
-                throw new RpcException(new Status(StatusCode.FailedPrecondition, $"Can't access cart storage. {ex}"));
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                activity?.AddEvent(new ActivityEvent("Exception", tags: new ActivityTagsCollection { { "exception.message", ex.Message } }));
+                throw new Grpc.Core.RpcException(new Grpc.Core.Status(Grpc.Core.StatusCode.FailedPrecondition, ex.Message));
             }
         }
 

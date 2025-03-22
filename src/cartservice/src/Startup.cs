@@ -15,6 +15,7 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Logs;
+using StackExchange.Redis;
 
 namespace cartservice
 {
@@ -35,6 +36,8 @@ namespace cartservice
             string spannerProjectId = Configuration["SPANNER_PROJECT"];
             string spannerConnectionString = Configuration["SPANNER_CONNECTION_STRING"];
             string alloyDBConnectionString = Configuration["ALLOYDB_PRIMARY_IP"];
+
+            var multiplexer = ConnectionMultiplexer.Connect(redisAddress);
 
             if (!string.IsNullOrEmpty(redisAddress))
             {
@@ -72,7 +75,7 @@ namespace cartservice
 						.AddAspNetCoreInstrumentation()  // 追蹤 gRPC 和 HTTP 請求
 						.AddGrpcClientInstrumentation() // 追蹤 gRPC 客戶端請求
 						.AddHttpClientInstrumentation() // 追蹤 HTTP 請求 (如有)
-						.AddRedisInstrumentation() // 追蹤 Redis 操作
+						.AddRedisInstrumentation(multiplexer) // 追蹤 Redis 操作
 						.AddOtlpExporter(opts => opts.Endpoint = new Uri(otlpEndpoint)); // 發送資料到 OpenTelemetry Collector
 						});
 
