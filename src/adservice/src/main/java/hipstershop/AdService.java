@@ -28,6 +28,7 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
 import io.grpc.services.*;
 import io.grpc.stub.StreamObserver;
+import io.grpc.ServerInterceptors;
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanKind;
@@ -80,7 +81,7 @@ public final class AdService {
 
     server =
         ServerBuilder.forPort(port)
-            .addService(new AdServiceImpl())
+            .addService(ServerInterceptors.intercept(new AdServiceImpl()))
             .addService(healthMgr.getHealthService())
             .build()
             .start();
@@ -116,7 +117,7 @@ public final class AdService {
      */
     @Override
     public void getAds(AdRequest req, StreamObserver<AdResponse> responseObserver) {
-      Span span = tracer.spanBuilder("getAds").setSpanKind(SpanKind.SERVER).startSpan();
+      // Span span = tracer.spanBuilder("getAds").setSpanKind(SpanKind.SERVER).startSpan();
       AdService service = AdService.getInstance();
       try {
         List<Ad> allAds = new ArrayList<>();
@@ -140,7 +141,7 @@ public final class AdService {
         logger.log(Level.WARN, "GetAds Failed with status {}", e.getStatus());
         responseObserver.onError(e);
       } finally {
-        span.end();
+        // span.end();
       }
     }
   }

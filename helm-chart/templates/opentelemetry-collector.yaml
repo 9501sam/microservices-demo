@@ -43,6 +43,7 @@ spec:
         app: {{ .Values.opentelemetryCollector.name }}
     spec:
       nodeSelector:
+        # general-node: "true"
         telemetry-node: "true"
       {{- if .Values.serviceAccounts.create }}
       serviceAccountName: {{ .Values.opentelemetryCollector.name }}

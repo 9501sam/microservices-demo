@@ -31,6 +31,7 @@ spec:
         app: jaeger
     spec:
       nodeSelector:
+        # general-node: "true"
         telemetry-node: "true"
       containers:
         - name: jaeger
